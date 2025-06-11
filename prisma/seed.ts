@@ -9,7 +9,7 @@ async function main() {
   // USERS & AUTHENTICATION
   // =============================================
 
-  // Create admin user
+  // Create admin user - Fixed email consistency for authentication
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@laberinto.com' },
     update: {},
