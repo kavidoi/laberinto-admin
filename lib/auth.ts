@@ -10,6 +10,7 @@ export const {
   signOut,
 } = NextAuth({
   secret: process.env.NEXTAUTH_SECRET,
+  trustHost: true, // Required for production deployment
   session: {
     strategy: "jwt",
   },
@@ -56,18 +57,28 @@ export const {
   ],
   callbacks: {
     async jwt({ token, user }) {
-      if (user) {
-        token.role = user.role as UserRole
-        token.id = user.id
+      try {
+        if (user) {
+          token.role = user.role
+          token.id = user.id
+        }
+        return token
+      } catch (error) {
+        console.error('JWT callback error:', error)
+        return token
       }
-      return token
     },
     async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id as string
-        session.user.role = token.role as UserRole
+      try {
+        if (token && session.user) {
+          session.user.id = token.id as string
+          session.user.role = token.role as UserRole
+        }
+        return session
+      } catch (error) {
+        console.error('Session callback error:', error)
+        return session
       }
-      return session
     },
   },
 }) 
