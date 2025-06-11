@@ -74,6 +74,12 @@ const nextConfig = {
   // Redirects
   async redirects() {
     return [
+      // Temporary redirect to force cache clear
+      {
+        source: '/admin/dashboard',
+        destination: '/admin',
+        permanent: false,
+      },
       {
         source: '/shop',
         destination: '/wines',
