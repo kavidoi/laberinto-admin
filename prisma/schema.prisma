@@ -1,0 +1,1068 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================
+// AUTH & USER MANAGEMENT
+// =============================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  phone         String?
+  role          UserRole  @default(CUSTOMER)
+  
+  // Profile information
+  firstName     String?
+  lastName      String?
+  birthDate     DateTime?
+  rut           String?   @unique // Chilean RUT/ID
+  
+  // Address information
+  addresses     ShippingAddress[]
+  
+  // Customer preferences
+  preferences   UserPreferences?
+  
+  // Relationships
+  accounts      Account[]
+  sessions      Session[]
+  
+  // Ecommerce
+  carts         ShoppingCart[]
+  orders        Order[]
+  reviews       WineRating[]
+  wishlist      WishlistItem[]
+  loyaltyPoints LoyaltyPoint[]
+  
+  // Experiences
+  organizedBookings  Booking[] @relation("BookingOrganizer")
+  participantBookings BookingParticipant[]
+  
+  // Wine sales (for vendors/staff)
+  wineSales     WineSale[]
+  customerSales WineSale[] @relation("WineSaleCustomer")
+  
+  // Staff assignments
+  locationStaff LocationStaff[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model UserPreferences {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  
+  // Wine preferences
+  preferredWineTypes String[] // ["red", "white", "rosé", "sparkling", "dessert"]
+  preferredRegions   String[]
+  preferredPriceRange Json?   // {min: number, max: number}
+  
+  // Communication preferences
+  emailNotifications Boolean @default(true)
+  smsNotifications   Boolean @default(false)
+  marketingEmails    Boolean @default(true)
+  
+  // Experience preferences
+  preferredGroupSize Int?
+  accessibility      String[]
+  
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+enum UserRole {
+  CUSTOMER
+  STAFF
+  MANAGER
+  ADMIN
+  SUPER_ADMIN
+}
+
+// =============================================
+// WINE CATALOG & INVENTORY
+// =============================================
+
+model WineCategory {
+  id          String @id @default(cuid())
+  name        String @unique
+  description String?
+  slug        String @unique
+  parentId    String?
+  
+  parent      WineCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    WineCategory[] @relation("CategoryHierarchy")
+  wines       Wine[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("wine_categories")
+}
+
+model WineRegion {
+  id          String @id @default(cuid())
+  name        String @unique
+  country     String
+  description String?
+  
+  wines       Wine[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("wine_regions")
+}
+
+model Wine {
+  id                  String @id @default(cuid())
+  name                String
+  code                String @unique
+  slug                String @unique
+  
+  // Basic information
+  categoryId          String
+  regionId            String
+  producer            String
+  alcohol             Float?
+  description         String? @db.Text
+  tastingNotes        String? @db.Text
+  pairingNotes        String? @db.Text
+  
+  // Media
+  images              String[] // URLs to wine images
+  barcode             String?
+  
+  // Pricing and availability
+  basePrice           Decimal @db.Decimal(10, 2)
+  isActive            Boolean @default(true)
+  isFeatured          Boolean @default(false)
+  
+  // SEO
+  metaTitle           String?
+  metaDescription     String?
+  
+  // Relationships
+  category            WineCategory @relation(fields: [categoryId], references: [id])
+  region              WineRegion   @relation(fields: [regionId], references: [id])
+  vintages            WineVintage[]
+  products            Product[]
+  ratings             WineRating[]
+  inventoryItems      InventoryItem[]
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("wines")
+}
+
+model WineVintage {
+  id              String @id @default(cuid())
+  wineId          String
+  year            Int
+  
+  // Vintage-specific details
+  characteristics String? @db.Text
+  tastingNotes    String? @db.Text
+  pairingNotes    String? @db.Text
+  
+  // Availability
+  isAvailable     Boolean @default(true)
+  isDefault       Boolean @default(false) // One vintage can be the default for a wine
+  
+  wine            Wine    @relation(fields: [wineId], references: [id], onDelete: Cascade)
+  products        Product[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([wineId, year])
+  @@map("wine_vintages")
+}
+
+model Product {
+  id              String @id @default(cuid())
+  wineId          String
+  vintageId       String?
+  
+  // Product details
+  name            String
+  sku             String @unique
+  
+  // Pricing
+  price           Decimal @db.Decimal(10, 2)
+  comparePrice    Decimal? @db.Decimal(10, 2) // For showing discounts
+  
+  // Physical properties
+  volume          Int? // in milliliters
+  packageType     String? // "bottle", "box", "magnum", etc.
+  
+  // Inventory
+  trackInventory  Boolean @default(true)
+  
+  // Status
+  isActive        Boolean @default(true)
+  
+  // Relationships
+  wine            Wine         @relation(fields: [wineId], references: [id])
+  vintage         WineVintage? @relation(fields: [vintageId], references: [id])
+  inventoryItems  InventoryItem[]
+  orderItems      OrderItem[]
+  cartItems       CartItem[]
+  wishlistItems   WishlistItem[]
+  wineSaleItems   WineSaleItem[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("products")
+}
+
+model Location {
+  id                String @id @default(cuid())
+  name              String
+  type              LocationType
+  
+  // Address information
+  address           String
+  city              String
+  state             String?
+  country           String @default("Chile")
+  postalCode        String?
+  
+  // Contact information
+  contactPerson     String?
+  contactEmail      String?
+  contactPhone      String?
+  
+  // Capacity and features
+  capacity          Int?
+  isActive          Boolean @default(true)
+  
+  // Relationships
+  inventoryItems    InventoryItem[]
+  events           Event[]
+  staff            LocationStaff[]
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("locations")
+}
+
+model LocationStaff {
+  id         String @id @default(cuid())
+  locationId String
+  userId     String
+  role       String
+  
+  location   Location @relation(fields: [locationId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+  
+  createdAt  DateTime @default(now())
+  
+  @@unique([locationId, userId])
+  @@map("location_staff")
+}
+
+model InventoryItem {
+  id           String @id @default(cuid())
+  productId    String
+  wineId       String
+  locationId   String
+  
+  // Stock levels
+  quantity     Int
+  reservedQty  Int @default(0) // Reserved for pending orders
+  minLevel     Int @default(0) // Minimum stock level
+  
+  // Costing
+  costPrice    Decimal? @db.Decimal(10, 2)
+  
+  // Relationships
+  product      Product       @relation(fields: [productId], references: [id])
+  wine         Wine          @relation(fields: [wineId], references: [id])
+  location     Location      @relation(fields: [locationId], references: [id])
+  movements    StockMovement[]
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([productId, locationId])
+  @@map("inventory_items")
+}
+
+model StockMovement {
+  id              String @id @default(cuid())
+  inventoryItemId String
+  
+  // Movement details
+  type            StockMovementType
+  quantity        Int // Positive for inbound, negative for outbound
+  reference       String? // Order number, adjustment reason, etc.
+  notes           String?
+  
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  
+  createdAt       DateTime @default(now())
+
+  @@map("stock_movements")
+}
+
+model WineRating {
+  id        String @id @default(cuid())
+  wineId    String
+  userId    String
+  
+  rating    Int // 1-5 scale
+  title     String?
+  comment   String? @db.Text
+  isPublic  Boolean @default(true)
+  
+  wine      Wine @relation(fields: [wineId], references: [id])
+  user      User @relation(fields: [userId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([wineId, userId])
+  @@map("wine_ratings")
+}
+
+enum LocationType {
+  WAREHOUSE
+  STORE
+  TASTING_ROOM
+  VINEYARD
+}
+
+enum StockMovementType {
+  INBOUND_PURCHASE
+  INBOUND_TRANSFER
+  INBOUND_ADJUSTMENT
+  OUTBOUND_SALE
+  OUTBOUND_TRANSFER
+  OUTBOUND_ADJUSTMENT
+  OUTBOUND_EXPERIENCE
+}
+
+// =============================================
+// EXPERIENCES & EVENTS
+// =============================================
+
+model Experience {
+  id              String @id @default(cuid())
+  name            String
+  slug            String @unique
+  
+  // Experience details
+  type            ExperienceType
+  description     String @db.Text
+  longDescription String? @db.Text
+  duration        Int // in minutes
+  
+  // Capacity
+  minParticipants Int @default(1)
+  maxParticipants Int
+  
+  // Pricing
+  basePrice       Decimal @db.Decimal(10, 2)
+  pricePerPerson  Decimal? @db.Decimal(10, 2) // For group experiences
+  nonDrinkerDiscount Decimal? @db.Decimal(10, 2)
+  
+  // Status
+  isActive        Boolean @default(true)
+  isPublic        Boolean @default(true)
+  
+  // Media
+  images          String[]
+  
+  // Requirements
+  ageRestriction  Int? // Minimum age
+  requirements    String? @db.Text
+  
+  // Relationships
+  events          Event[]
+  addOns          ExperienceAddOn[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("experiences")
+}
+
+model ExperienceAddOn {
+  id           String @id @default(cuid())
+  experienceId String
+  
+  name         String
+  description  String?
+  price        Decimal @db.Decimal(10, 2)
+  isRequired   Boolean @default(false)
+  isActive     Boolean @default(true)
+  
+  experience   Experience @relation(fields: [experienceId], references: [id])
+  bookingAddOns BookingAddOn[]
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("experience_add_ons")
+}
+
+model Event {
+  id           String @id @default(cuid())
+  experienceId String
+  locationId   String
+  
+  // Schedule
+  startTime    DateTime
+  endTime      DateTime
+  
+  // Capacity
+  maxParticipants Int
+  
+  // Status
+  status       EventStatus @default(SCHEDULED)
+  
+  // Special pricing for this event
+  priceOverride Decimal? @db.Decimal(10, 2)
+  
+  // Relationships
+  experience   Experience @relation(fields: [experienceId], references: [id])
+  location     Location   @relation(fields: [locationId], references: [id])
+  bookings     Booking[]
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("events")
+}
+
+model Booking {
+  id              String @id @default(cuid())
+  eventId         String
+  organizerId     String
+  
+  // Group details
+  groupName       String?
+  totalParticipants Int
+  adultsCount     Int
+  childrenCount   Int @default(0)
+  nonDrinkersCount Int @default(0)
+  
+  // Pricing
+  subtotal        Decimal @db.Decimal(10, 2)
+  discountAmount  Decimal @default(0) @db.Decimal(10, 2)
+  totalAmount     Decimal @db.Decimal(10, 2)
+  
+  // Status
+  status          BookingStatus @default(PENDING)
+  
+  // Special requests
+  specialRequests String? @db.Text
+  notes           String? @db.Text
+  
+  // Relationships
+  event           Event @relation(fields: [eventId], references: [id])
+  organizer       User  @relation("BookingOrganizer", fields: [organizerId], references: [id])
+  participants    BookingParticipant[]
+  addOns          BookingAddOn[]
+  payments        Payment[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("bookings")
+}
+
+model BookingParticipant {
+  id        String @id @default(cuid())
+  bookingId String
+  userId    String?
+  
+  // Participant details (for non-registered users)
+  name      String
+  email     String?
+  phone     String?
+  age       Int?
+  isDrinker Boolean @default(true)
+  
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  user      User?   @relation(fields: [userId], references: [id])
+  
+  createdAt DateTime @default(now())
+
+  @@map("booking_participants")
+}
+
+model BookingAddOn {
+  id           String @id @default(cuid())
+  bookingId    String
+  addOnId      String
+  
+  quantity     Int @default(1)
+  unitPrice    Decimal @db.Decimal(10, 2)
+  totalPrice   Decimal @db.Decimal(10, 2)
+  
+  booking      Booking        @relation(fields: [bookingId], references: [id])
+  addOn        ExperienceAddOn @relation(fields: [addOnId], references: [id])
+  
+  createdAt    DateTime @default(now())
+
+  @@map("booking_add_ons")
+}
+
+enum ExperienceType {
+  GROUP_TASTING
+  PRIVATE_TASTING
+  WINE_TOUR
+  MASTERCLASS
+  VINEYARD_VISIT
+  FOOD_PAIRING
+}
+
+enum EventStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  PARTIALLY_PAID
+  PAID
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+// =============================================
+// ECOMMERCE
+// =============================================
+
+model ShoppingCart {
+  id        String @id @default(cuid())
+  userId    String
+  
+  user      User       @relation(fields: [userId], references: [id])
+  items     CartItem[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("shopping_carts")
+}
+
+model CartItem {
+  id        String @id @default(cuid())
+  cartId    String
+  productId String
+  
+  quantity  Int
+  
+  cart      ShoppingCart @relation(fields: [cartId], references: [id])
+  product   Product      @relation(fields: [productId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, productId])
+  @@map("cart_items")
+}
+
+model WishlistItem {
+  id        String @id @default(cuid())
+  userId    String
+  productId String
+  
+  user      User    @relation(fields: [userId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+  
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@map("wishlist_items")
+}
+
+model Order {
+  id              String @id @default(cuid())
+  userId          String
+  orderNumber     String @unique
+  
+  // Status
+  status          OrderStatus @default(PENDING)
+  
+  // Amounts
+  subtotal        Decimal @db.Decimal(10, 2)
+  shippingCost    Decimal @default(0) @db.Decimal(10, 2)
+  taxAmount       Decimal @default(0) @db.Decimal(10, 2)
+  discountAmount  Decimal @default(0) @db.Decimal(10, 2)
+  totalAmount     Decimal @db.Decimal(10, 2)
+  
+  // Shipping information
+  shippingAddress Json
+  billingAddress  Json?
+  
+  // Order notes
+  notes           String?
+  customerNotes   String?
+  
+  // Relationships
+  user            User        @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+  shipments       Shipment[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String @id @default(cuid())
+  orderId     String
+  productId   String
+  
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(10, 2)
+  totalPrice  Decimal @db.Decimal(10, 2)
+  
+  order       Order   @relation(fields: [orderId], references: [id])
+  product     Product @relation(fields: [productId], references: [id])
+  
+  createdAt   DateTime @default(now())
+
+  @@map("order_items")
+}
+
+model ShippingAddress {
+  id           String @id @default(cuid())
+  userId       String
+  
+  // Address details
+  firstName    String
+  lastName     String
+  company      String?
+  address1     String
+  address2     String?
+  city         String
+  state        String?
+  postalCode   String
+  country      String @default("Chile")
+  phone        String?
+  
+  // Flags
+  isDefault    Boolean @default(false)
+  
+  user         User @relation(fields: [userId], references: [id])
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("shipping_addresses")
+}
+
+model Shipment {
+  id            String @id @default(cuid())
+  orderId       String
+  
+  trackingNumber String?
+  carrier       String?
+  method        String?
+  
+  status        ShipmentStatus @default(PENDING)
+  
+  shippedAt     DateTime?
+  deliveredAt   DateTime?
+  
+  order         Order @relation(fields: [orderId], references: [id])
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("shipments")
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum ShipmentStatus {
+  PENDING
+  PICKED_UP
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+}
+
+// =============================================
+// PAYMENTS & FINANCIAL
+// =============================================
+
+model Payment {
+  id                String @id @default(cuid())
+  
+  // Link to order or booking
+  orderId           String?
+  bookingId         String?
+  
+  // Payment details
+  amount            Decimal @db.Decimal(10, 2)
+  currency          String @default("CLP")
+  method            PaymentMethod
+  status            PaymentStatus @default(PENDING)
+  
+  // External payment processor
+  stripePaymentIntentId String?
+  stripeChargeId       String?
+  
+  // Chilean tax information
+  taxType           TaxType?
+  taxNumber         String?
+  
+  // Additional information
+  reference         String?
+  notes             String?
+  
+  // Relationships
+  order             Order?   @relation(fields: [orderId], references: [id])
+  booking           Booking? @relation(fields: [bookingId], references: [id])
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("payments")
+}
+
+model Discount {
+  id             String @id @default(cuid())
+  code           String @unique
+  
+  // Discount details
+  type           DiscountType
+  value          Decimal @db.Decimal(10, 2) // Amount or percentage
+  
+  // Applicability
+  applicableTo   DiscountApplicability @default(ALL)
+  minOrderAmount Decimal? @db.Decimal(10, 2)
+  maxUsage       Int?
+  usageCount     Int @default(0)
+  
+  // Validity
+  isActive       Boolean @default(true)
+  startDate      DateTime?
+  endDate        DateTime?
+  
+  // Restrictions
+  userRestrictions String[] // User IDs or email patterns
+  productIds     String[] // Specific products
+  categoryIds    String[] // Specific categories
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("discounts")
+}
+
+model LoyaltyPoint {
+  id          String @id @default(cuid())
+  userId      String
+  
+  // Transaction details
+  points      Int
+  type        LoyaltyPointType
+  reference   String? // Order ID, booking ID, etc.
+  description String?
+  
+  user        User @relation(fields: [userId], references: [id])
+  
+  createdAt   DateTime @default(now())
+
+  @@map("loyalty_points")
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  DEBIT_CARD
+  BANK_TRANSFER
+  CASH
+  DIGITAL_WALLET
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum TaxType {
+  BOLETA
+  FACTURA
+  NONE
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum DiscountApplicability {
+  ALL
+  WINES_ONLY
+  EXPERIENCES_ONLY
+  SPECIFIC_PRODUCTS
+  SPECIFIC_CATEGORIES
+}
+
+enum LoyaltyPointType {
+  EARNED_PURCHASE
+  EARNED_REVIEW
+  EARNED_REFERRAL
+  REDEEMED
+  EXPIRED
+  ADJUSTMENT
+}
+
+// =============================================
+// WINE SALES (Staff/Vendor Sales)
+// =============================================
+
+model WineSale {
+  id              String @id @default(cuid())
+  vendorId        String
+  customerId      String?
+  
+  // Sale details
+  saleNumber      String @unique
+  saleDate        DateTime
+  
+  // Financial details
+  subtotal        Decimal @db.Decimal(10, 2)
+  discountAmount  Decimal @default(0) @db.Decimal(10, 2)
+  totalAmount     Decimal @db.Decimal(10, 2)
+  
+  // Payment information
+  paymentMethod   PaymentMethod
+  taxType         TaxType
+  taxNumber       String?
+  
+  // Status
+  status          WineSaleStatus @default(PENDING)
+  
+  // Notes
+  notes           String?
+  
+  // Relationships
+  vendor          User @relation(fields: [vendorId], references: [id])
+  customer        User? @relation("WineSaleCustomer", fields: [customerId], references: [id])
+  items           WineSaleItem[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("wine_sales")
+}
+
+model WineSaleItem {
+  id            String @id @default(cuid())
+  wineSaleId    String
+  productId     String
+  
+  quantity      Int
+  unitPrice     Decimal @db.Decimal(10, 2)
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
+  totalPrice    Decimal @db.Decimal(10, 2)
+  
+  wineSale      WineSale @relation(fields: [wineSaleId], references: [id])
+  product       Product  @relation(fields: [productId], references: [id])
+  
+  createdAt     DateTime @default(now())
+
+  @@map("wine_sale_items")
+}
+
+enum WineSaleStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+// =============================================
+// ANALYTICS & TRACKING
+// =============================================
+
+model AnalyticsEvent {
+  id         String @id @default(cuid())
+  
+  // Event details
+  event      String
+  properties Json?
+  
+  // Session information
+  sessionId  String?
+  userId     String?
+  
+  // Request information
+  ipAddress  String?
+  userAgent  String?
+  referrer   String?
+  
+  createdAt  DateTime @default(now())
+
+  @@map("analytics_events")
+}
+
+// =============================================
+// NOTIFICATIONS & COMMUNICATIONS
+// =============================================
+
+model NotificationTemplate {
+  id          String @id @default(cuid())
+  
+  name        String @unique
+  type        NotificationType
+  subject     String?
+  content     String @db.Text
+  
+  // Template variables documentation
+  variables   Json?
+  
+  isActive    Boolean @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("notification_templates")
+}
+
+model NotificationLog {
+  id         String @id @default(cuid())
+  
+  userId     String?
+  type       NotificationType
+  channel    NotificationChannel
+  recipient  String // Email, phone number, etc.
+  subject    String?
+  content    String @db.Text
+  
+  status     NotificationStatus @default(PENDING)
+  sentAt     DateTime?
+  deliveredAt DateTime?
+  errorMessage String?
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("notification_logs")
+}
+
+enum NotificationType {
+  WELCOME
+  ORDER_CONFIRMATION
+  PAYMENT_CONFIRMATION
+  BOOKING_CONFIRMATION
+  BOOKING_REMINDER
+  SHIPMENT_UPDATE
+  NEWSLETTER
+  PROMOTIONAL
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+  PUSH
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  BOUNCED
+}
+
+// =============================================
+// SYSTEM CONFIGURATION
+// =============================================
+
+model SystemConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value Json
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_config")
+} 
