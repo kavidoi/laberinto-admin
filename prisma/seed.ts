@@ -96,8 +96,10 @@ async function main() {
   })
 
   // Sample wines
-  const cabernet = await prisma.wine.create({
-    data: {
+  const cabernet = await prisma.wine.upsert({
+    where: { code: 'LAB-CAB-2021' },
+    update: {},
+    create: {
       name: 'Laberinto Cabernet Sauvignon Reserva',
       code: 'LAB-CAB-2021',
       slug: 'laberinto-cabernet-sauvignon-reserva-2021',
@@ -114,8 +116,10 @@ async function main() {
     },
   })
 
-  const sauvignonBlanc = await prisma.wine.create({
-    data: {
+  const sauvignonBlanc = await prisma.wine.upsert({
+    where: { code: 'LAB-SB-2023' },
+    update: {},
+    create: {
       name: 'Laberinto Sauvignon Blanc',
       code: 'LAB-SB-2023',
       slug: 'laberinto-sauvignon-blanc-2023',
@@ -138,30 +142,46 @@ async function main() {
   // LOCATIONS
   // =============================================
 
-  const mainLocation = await prisma.location.create({
-    data: {
-      name: 'Laberinto Main Winery',
-      type: LocationType.VINEYARD,
-      address: 'Camino Laberinto 123, Maipo Valley',
-      city: 'Santiago',
-      state: 'Metropolitana',
-      country: 'Chile',
-      postalCode: '8320000',
-      contactPhone: '+56223456789',
-      contactEmail: 'winery@laberinto.com',
-      capacity: 200,
-      isActive: true,
-    },
+  // Check if location exists first
+  let mainLocation = await prisma.location.findFirst({
+    where: { name: 'Laberinto Main Winery' }
   })
+  
+  if (!mainLocation) {
+    mainLocation = await prisma.location.create({
+      data: {
+        name: 'Laberinto Main Winery',
+        type: LocationType.VINEYARD,
+        address: 'Camino Laberinto 123, Maipo Valley',
+        city: 'Santiago',
+        state: 'Metropolitana',
+        country: 'Chile',
+        postalCode: '8320000',
+        contactPhone: '+56223456789',
+        contactEmail: 'winery@laberinto.com',
+        capacity: 200,
+        isActive: true,
+      },
+    })
+  }
 
-  // Add staff to location
-  await prisma.locationStaff.create({
-    data: {
+  // Add staff to location if not exists
+  const existingStaff = await prisma.locationStaff.findFirst({
+    where: {
       locationId: mainLocation.id,
       userId: adminUser.id,
-      role: 'Winery Manager',
     },
   })
+  
+  if (!existingStaff) {
+    await prisma.locationStaff.create({
+      data: {
+        locationId: mainLocation.id,
+        userId: adminUser.id,
+        role: 'Winery Manager',
+      },
+    })
+  }
 
   console.log('✅ Locations created')
 
@@ -169,8 +189,10 @@ async function main() {
   // EXPERIENCES
   // =============================================
 
-  const wineTouring = await prisma.experience.create({
-    data: {
+  const wineTouring = await prisma.experience.upsert({
+    where: { slug: 'wine-tasting-vineyard-tour' },
+    update: {},
+    create: {
       name: 'Wine Tasting & Vineyard Tour',
       slug: 'wine-tasting-vineyard-tour',
       type: ExperienceType.WINE_TOUR,
@@ -187,28 +209,33 @@ async function main() {
     },
   })
 
-  // Create sample events
-  const event1 = await prisma.event.create({
-    data: {
-      experienceId: wineTouring.id,
-      locationId: mainLocation.id,
-      startTime: new Date('2024-12-15T10:00:00'),
-      endTime: new Date('2024-12-15T12:00:00'),
-      maxParticipants: 12,
-      status: EventStatus.SCHEDULED,
-    },
-  })
+  // Create sample events (skip if they already exist)
+  try {
+    const event1 = await prisma.event.create({
+      data: {
+        experienceId: wineTouring.id,
+        locationId: mainLocation.id,
+        startTime: new Date('2024-12-15T10:00:00'),
+        endTime: new Date('2024-12-15T12:00:00'),
+        maxParticipants: 12,
+        status: EventStatus.SCHEDULED,
+      },
+    })
 
-  const event2 = await prisma.event.create({
-    data: {
-      experienceId: wineTouring.id,
-      locationId: mainLocation.id,
-      startTime: new Date('2024-12-15T15:00:00'),
-      endTime: new Date('2024-12-15T17:00:00'),
-      maxParticipants: 12,
-      status: EventStatus.SCHEDULED,
-    },
-  })
+    const event2 = await prisma.event.create({
+      data: {
+        experienceId: wineTouring.id,
+        locationId: mainLocation.id,
+        startTime: new Date('2024-12-15T15:00:00'),
+        endTime: new Date('2024-12-15T17:00:00'),
+        maxParticipants: 12,
+        status: EventStatus.SCHEDULED,
+      },
+    })
+  } catch (error) {
+    // Events might already exist, that's okay
+    console.log('⚠️ Events might already exist, skipping...')
+  }
 
   console.log('✅ Experiences and events created')
 
@@ -216,30 +243,36 @@ async function main() {
   // SYSTEM CONFIG
   // =============================================
 
-  await prisma.systemConfig.createMany({
-    data: [
-      {
-        key: 'site_name',
-        value: 'Laberinto',
-      },
-      {
-        key: 'currency',
-        value: 'CLP',
-      },
-      {
-        key: 'timezone',
-        value: 'America/Santiago',
-      },
-      {
-        key: 'max_booking_advance_days',
-        value: '90',
-      },
-      {
-        key: 'min_booking_advance_hours',
-        value: '24',
-      },
-    ],
-  })
+  try {
+    await prisma.systemConfig.createMany({
+      skipDuplicates: true,
+      data: [
+        {
+          key: 'site_name',
+          value: 'Laberinto',
+        },
+        {
+          key: 'currency',
+          value: 'CLP',
+        },
+        {
+          key: 'timezone',
+          value: 'America/Santiago',
+        },
+        {
+          key: 'max_booking_advance_days',
+          value: '90',
+        },
+        {
+          key: 'min_booking_advance_hours',
+          value: '24',
+        },
+      ],
+    })
+  } catch (error) {
+    // Config might already exist, that's okay
+    console.log('⚠️ System config might already exist, skipping...')
+  }
 
   console.log('✅ System configuration created')
   console.log('🎉 Database seeding completed successfully!')
