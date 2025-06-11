@@ -25,17 +25,25 @@ export default function AdminLayout({
   const pathname = usePathname()
 
   useEffect(() => {
+    console.log('Admin Layout - Session Status:', status)
+    console.log('Admin Layout - Session:', session)
+    console.log('Admin Layout - User Role:', session?.user?.role)
+    
     if (status === 'loading') return // Still loading
 
     if (!session) {
+      console.log('No session - redirecting to signin')
       router.push('/auth/signin?callbackUrl=/admin')
       return
     }
 
     if (session.user.role !== 'ADMIN') {
+      console.log('User role is not ADMIN:', session.user.role, '- redirecting to homepage')
       router.push('/')
       return
     }
+    
+    console.log('Admin access granted')
   }, [session, status, router])
 
   if (status === 'loading') {
