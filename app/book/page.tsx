@@ -595,9 +595,39 @@ export default function BookingPage() {
         </div>
 
         <button
-          onClick={() => {
-            setBookingId('BOOK-' + Date.now())
-            alert('¡Reserva confirmada! Te contactaremos pronto con los detalles.')
+          onClick={async () => {
+            try {
+              const response = await fetch('/api/bookings', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  experienceType: eventSelection?.path,
+                  guestCount: groupConfig?.guestCount,
+                  organizerName: groupConfig?.organizerName,
+                  organizerLastName: groupConfig?.organizerLastName,
+                  organizerEmail: groupConfig?.organizerEmail,
+                  organizerPhone: groupConfig?.organizerPhone,
+                  organizerCountry: groupConfig?.organizerCountry,
+                  specialRequests: groupConfig?.specialRequests,
+                  selectedExtras: selectedExtras,
+                  totalAmount: totalPrice
+                })
+              })
+              
+              const result = await response.json()
+              
+              if (result.success) {
+                setBookingId(result.booking.id)
+                alert(`¡Reserva confirmada! ID: ${result.booking.id}. Te contactaremos pronto con los detalles.`)
+              } else {
+                alert(`Error: ${result.error}`)
+              }
+            } catch (error) {
+              console.error('Booking error:', error)
+              alert('Error al crear la reserva. Por favor intenta de nuevo.')
+            }
           }}
           className="w-full bg-purple-600 text-white py-3 px-4 rounded-md hover:bg-purple-700 transition-colors duration-200 font-medium"
         >
