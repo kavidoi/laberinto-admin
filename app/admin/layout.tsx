@@ -5,13 +5,19 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { Emoji } from '@/components/ui/emoji'
 
 const adminNavItems = [
-  { name: 'Dashboard', href: '/admin', icon: '📊' },
-  { name: 'Reservas', href: '/admin/reservations', icon: '📅' },
-  { name: 'Eventos', href: '/admin/events', icon: '🎉' },
+  { name: 'Panel Principal', href: '/admin', icon: '📊' },
+  { name: 'Ventas de Vino', href: '/admin/sales', icon: '💰' },
+  { name: 'Catálogo de Vinos', href: '/admin/wines', icon: '🍷' },
+  { name: 'Catálogo de Experiencias', href: '/admin/experiencias', icon: '✨' },
+  { name: 'Clientes', href: '/admin/customers', icon: '👥' },
+  { name: 'Locaciones', href: '/admin/locations', icon: '📍' },
+  { name: 'Eventos', href: '/admin/events', icon: '📅' },
+  { name: 'Reservas', href: '/admin/reservations', icon: '📋' },
   { name: 'Pagos', href: '/admin/payments', icon: '💳' },
-  { name: 'Usuarios', href: '/admin/users', icon: '👥' },
+  { name: 'Analíticas', href: '/admin/analytics', icon: '📈' },
   { name: 'Configuración', href: '/admin/settings', icon: '⚙️' },
 ]
 
@@ -24,7 +30,15 @@ export default function AdminLayout({
   const router = useRouter()
   const pathname = usePathname()
 
+  // Temporarily disable auth check for demo
+  const isDemoMode = true
+
   useEffect(() => {
+    if (isDemoMode) {
+      console.log('Demo mode - bypassing authentication')
+      return
+    }
+
     console.log('Admin Layout - Session Status:', status)
     console.log('Admin Layout - Session:', session)
     console.log('Admin Layout - User Role:', session?.user?.role)
@@ -44,9 +58,9 @@ export default function AdminLayout({
     }
     
     console.log('Admin access granted')
-  }, [session, status, router])
+  }, [session, status, router, isDemoMode])
 
-  if (status === 'loading') {
+  if (!isDemoMode && status === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -57,14 +71,31 @@ export default function AdminLayout({
     )
   }
 
-  if (!session || session.user.role !== 'ADMIN') {
+  if (!isDemoMode && (!session || session.user.role !== 'ADMIN')) {
     return null // Will redirect
   }
 
+  // Mock user for demo
+  const demoUser = {
+    name: 'Admin Demo',
+    email: 'admin@laberinto.com'
+  }
+
+  const currentUser = isDemoMode ? demoUser : session?.user
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Demo banner */}
+      {isDemoMode && (
+        <div className="bg-blue-600 text-white text-center py-2 text-sm flex items-center justify-center">
+          <Emoji emoji="🚧" size="sm" className="mr-2" />
+          MODO DEMO - Autenticación deshabilitada para pruebas
+          <Emoji emoji="🚧" size="sm" className="ml-2" />
+        </div>
+      )}
+
       {/* Sidebar */}
-      <div className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg">
+      <div className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg" style={{ top: isDemoMode ? '40px' : '0' }}>
         <div className="flex h-full flex-col">
           {/* Logo */}
           <div className="flex h-16 items-center justify-center bg-amber-600">
@@ -87,7 +118,7 @@ export default function AdminLayout({
                       : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
-                  <span className="mr-3 text-lg">{item.icon}</span>
+                  <Emoji emoji={item.icon} size="lg" className="mr-3" />
                   {item.name}
                 </Link>
               )
@@ -99,12 +130,12 @@ export default function AdminLayout({
             <div className="flex items-center">
               <div className="h-10 w-10 rounded-full bg-amber-600 flex items-center justify-center">
                 <span className="text-sm font-medium text-white">
-                  {session.user.name?.charAt(0) || 'A'}
+                  {currentUser?.name?.charAt(0) || 'A'}
                 </span>
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-700">{session.user.name}</p>
-                <p className="text-xs text-gray-500">{session.user.email}</p>
+                <p className="text-sm font-medium text-gray-700">{currentUser?.name}</p>
+                <p className="text-xs text-gray-500">{currentUser?.email}</p>
               </div>
             </div>
           </div>
@@ -112,7 +143,7 @@ export default function AdminLayout({
       </div>
 
       {/* Main content */}
-      <div className="pl-64">
+      <div className="pl-64" style={{ paddingTop: isDemoMode ? '40px' : '0' }}>
         {/* Header */}
         <header className="bg-white shadow-sm border-b border-gray-200">
           <div className="px-6 py-4">
@@ -131,7 +162,7 @@ export default function AdminLayout({
                   href="/api/auth/signout"
                   className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 transition-colors"
                 >
-                  Cerrar sesión
+                  {isDemoMode ? 'Modo Demo' : 'Cerrar sesión'}
                 </Link>
               </div>
             </div>

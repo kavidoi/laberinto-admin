@@ -9,7 +9,7 @@ export const {
   signIn,
   signOut,
 } = NextAuth({
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.NEXTAUTH_SECRET || "dQf1cMV7hZc90YD20hvi9D56g0ix1qTb9siGHVMrTmc=",
   trustHost: true, // Required for production deployment
   session: {
     strategy: "jwt",

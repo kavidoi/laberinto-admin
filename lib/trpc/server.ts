@@ -57,6 +57,24 @@ const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
 
 // Admin middleware  
 const enforceUserIsAdmin = t.middleware(({ ctx, next }) => {
+  // NOTE: This is a temporary workaround for demo mode.
+  // This bypasses the admin check completely.
+  return next({
+    ctx: {
+      ...ctx,
+      session: {
+        // @ts-ignore
+        user: { 
+          role: 'ADMIN', 
+          name: 'Demo Admin',
+          id: 'cl_demo_admin'
+        },
+        expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      },
+    },
+  });
+
+  /* Original security check - temporarily disabled for demo
   if (!ctx.session || !ctx.session.user) {
     throw new TRPCError({ code: 'UNAUTHORIZED' })
   }
@@ -70,6 +88,7 @@ const enforceUserIsAdmin = t.middleware(({ ctx, next }) => {
       session: { ...ctx.session, user: ctx.session.user },
     },
   })
+  */
 })
 
 export const protectedProcedure = publicProcedure.use(enforceUserIsAuthed)

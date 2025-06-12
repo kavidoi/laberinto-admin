@@ -56,4 +56,18 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Twemoji emoji styling for consistent cross-platform rendering */
+.emoji {
+  display: inline-block;
+  margin: 0 .05em 0 .1em;
+  vertical-align: -0.1em;
+}
+
+.emoji img {
+  width: 1em;
+  height: 1em;
+  max-width: none !important;
+  max-height: none !important;
 } 

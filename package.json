@@ -23,7 +23,8 @@
     "test:coverage": "jest --coverage",
     "test:e2e": "playwright test",
     "prepare": "husky install",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "migrate:airtable": "tsx scripts/migrate-airtable-data.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -90,6 +91,7 @@
     "superjson": "^2.2.1",
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",
+    "twemoji": "^14.0.2",
     "vaul": "^0.8.9",
     "zod": "^3.22.4",
     "zustand": "^4.4.7"
@@ -105,6 +107,7 @@
     "@types/node": "^20.11.5",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
+    "@types/twemoji": "^13.1.1",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
     "autoprefixer": "^10.4.17",

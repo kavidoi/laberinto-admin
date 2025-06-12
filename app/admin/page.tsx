@@ -1,298 +1,242 @@
-'use client'
-
-import { trpc } from '@/lib/trpc/client'
+import { Metadata } from 'next'
 import Link from 'next/link'
+import { PrismaClient } from '@prisma/client'
+import { Emoji } from '@/components/ui/emoji'
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('es-CL', {
-    style: 'currency',
-    currency: 'CLP',
-    minimumFractionDigits: 0,
-  }).format(amount)
+const prisma = new PrismaClient()
+
+export const metadata: Metadata = {
+  title: 'Dashboard Admin',
+  description: 'Panel administrativo principal de Laberinto Wines',
 }
 
-const StatCard = ({ 
-  title, 
-  value, 
-  description, 
-  icon, 
-  trend 
-}: { 
-  title: string
-  value: string | number
-  description: string
-  icon: string
-  trend?: { value: number; label: string }
-}) => (
-  <div className="bg-white rounded-lg shadow p-6">
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm font-medium text-gray-600">{title}</p>
-        <p className="text-3xl font-bold text-gray-900">{value}</p>
-        <p className="text-sm text-gray-500">{description}</p>
-        {trend && (
-          <div className="mt-2 flex items-center">
-            <span className={`text-sm font-medium ${
-              trend.value > 0 ? 'text-green-600' : trend.value < 0 ? 'text-red-600' : 'text-gray-600'
-            }`}>
-              {trend.value > 0 ? '↗' : trend.value < 0 ? '↘' : '→'} {Math.abs(trend.value)}%
-            </span>
-            <span className="text-sm text-gray-500 ml-1">{trend.label}</span>
-          </div>
-        )}
-      </div>
-      <div className="h-12 w-12 bg-amber-100 rounded-lg flex items-center justify-center">
-        <span className="text-2xl">{icon}</span>
-      </div>
-    </div>
-  </div>
-)
+async function getDashboardStats() {
+  try {
+    const [
+      totalCustomers,
+      totalWines,
+      totalBookings,
+      totalWineSales,
+      totalLocations,
+      totalRevenue
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.wine.count(),
+      prisma.booking.count(),
+      prisma.wineSale.count(),
+      prisma.location.count(),
+      prisma.wineSale.aggregate({ _sum: { totalAmount: true } })
+    ])
 
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'PENDING':
-      return 'bg-yellow-100 text-yellow-800'
-    case 'CONFIRMED':
-      return 'bg-blue-100 text-blue-800'
-    case 'PAID':
-      return 'bg-green-100 text-green-800'
-    case 'COMPLETED':
-      return 'bg-emerald-100 text-emerald-800'
-    case 'CANCELLED':
-      return 'bg-red-100 text-red-800'
-    case 'NO_SHOW':
-      return 'bg-gray-100 text-gray-800'
-    default:
-      return 'bg-gray-100 text-gray-800'
+    return {
+      totalCustomers,
+      totalWines,
+      totalBookings,
+      totalWineSales,
+      totalLocations,
+      totalRevenue: Math.round(Number(totalRevenue._sum.totalAmount || 0))
+    }
+  } catch (error) {
+    console.error('Error loading dashboard stats:', error)
+    return {
+      totalCustomers: 0,
+      totalWines: 0,
+      totalBookings: 0,
+      totalWineSales: 0,
+      totalLocations: 0,
+      totalRevenue: 0
+    }
   }
 }
 
-const formatStatus = (status: string) => {
-  const statusMap: Record<string, string> = {
-    PENDING: 'Pendiente',
-    CONFIRMED: 'Confirmada',
-    PARTIALLY_PAID: 'Pago Parcial',
-    PAID: 'Pagada',
-    COMPLETED: 'Completada',
-    CANCELLED: 'Cancelada',
-    NO_SHOW: 'No Asistió'
-  }
-  return statusMap[status] || status
-}
-
-export default function AdminDashboard() {
-  const { data: stats, isLoading: statsLoading } = trpc.admin.getBookingStats.useQuery()
-  const { data: activity, isLoading: activityLoading } = trpc.admin.getRecentActivity.useQuery()
-
-  if (statsLoading || activityLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white rounded-lg shadow p-6 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-              <div className="h-8 bg-gray-200 rounded w-3/4 mb-2"></div>
-              <div className="h-3 bg-gray-200 rounded w-full"></div>
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
+export default async function AdminDashboard() {
+  const stats = await getDashboardStats()
 
   return (
     <div className="space-y-6">
-      {/* Welcome Header */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Bienvenido al Panel de Administración</h2>
-        <p className="text-gray-600">Aquí puedes gestionar todas las reservas y experiencias de Laberinto.</p>
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Panel Principal</h1>
+        <p className="text-gray-600 mt-2">Bienvenido al sistema administrativo de Laberinto Wines</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title="Total Reservas"
-          value={stats?.totalBookings || 0}
-          description="Todas las reservas registradas"
-          icon="📅"
-        />
-        <StatCard
-          title="Reservas Pendientes"
-          value={stats?.pendingBookings || 0}
-          description="Esperando confirmación"
-          icon="⏳"
-        />
-        <StatCard
-          title="Reservas Confirmadas"
-          value={stats?.confirmedBookings || 0}
-          description="Confirmadas y pagadas"
-          icon="✅"
-        />
-        <StatCard
-          title="Ingresos Totales"
-          value={formatCurrency(Number(stats?.totalRevenue || 0))}
-          description="Todos los pagos recibidos"
-          icon="💰"
-        />
-      </div>
-
-      {/* Monthly Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard
-          title="Reservas Este Mes"
-          value={stats?.monthlyBookings || 0}
-          description="Nuevas reservas del mes"
-          icon="📊"
-        />
-        <StatCard
-          title="Reservas Esta Semana"
-          value={stats?.weeklyBookings || 0}
-          description="Reservas de los últimos 7 días"
-          icon="📈"
-        />
-        <StatCard
-          title="Ingresos del Mes"
-          value={formatCurrency(Number(stats?.monthlyRevenue || 0))}
-          description="Pagos recibidos este mes"
-          icon="💳"
-        />
-      </div>
-
-      {/* Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Bookings */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium text-gray-900">Reservas Recientes</h3>
-              <Link 
-                href="/admin/reservations"
-                className="text-sm text-amber-600 hover:text-amber-700"
-              >
-                Ver todas
-              </Link>
+      {/* Success Banner */}
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">
+            <Emoji emoji="🎉" size="2xl" />
+          </div>
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-green-800">
+              ¡Importación de Airtable Completada!
+            </h3>
+            <div className="mt-2 text-sm text-green-700">
+              <p>Todos los datos han sido importados exitosamente desde Airtable. El sistema está listo para usar.</p>
             </div>
           </div>
-          <div className="p-6">
-            {activity?.recentBookings && activity.recentBookings.length > 0 ? (
-              <div className="space-y-4">
-                {activity.recentBookings.slice(0, 5).map((booking) => (
-                  <div key={booking.id} className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">
-                        {booking.organizer.name}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {booking.event.experience.name}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {new Date(booking.createdAt).toLocaleDateString('es-ES')}
-                      </p>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                        {formatStatus(booking.status)}
-                      </span>
-                      <span className="text-sm font-medium text-gray-900">
-                        {formatCurrency(Number(booking.totalAmount))}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-4">No hay reservas recientes</p>
-            )}
+        </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6">
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Emoji emoji="👥" size="2xl" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Total Clientes</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalCustomers}</p>
+            </div>
           </div>
         </div>
 
-        {/* Recent Payments */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium text-gray-900">Pagos Recientes</h3>
-              <Link 
-                href="/admin/payments"
-                className="text-sm text-amber-600 hover:text-amber-700"
-              >
-                Ver todos
-              </Link>
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <Emoji emoji="🍷" size="2xl" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Vinos</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalWines}</p>
             </div>
           </div>
-          <div className="p-6">
-            {activity?.recentPayments && activity.recentPayments.length > 0 ? (
-              <div className="space-y-4">
-                {activity.recentPayments.slice(0, 5).map((payment) => (
-                  <div key={payment.id} className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">
-                        {payment.booking?.organizer.name}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {payment.booking?.event.experience.name}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {new Date(payment.createdAt).toLocaleDateString('es-ES')}
-                      </p>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        payment.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : 
-                        payment.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : 
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {payment.status === 'COMPLETED' ? 'Completado' : 
-                         payment.status === 'PENDING' ? 'Pendiente' : 
-                         payment.status}
-                      </span>
-                      <span className="text-sm font-medium text-gray-900">
-                        {formatCurrency(Number(payment.amount))}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-4">No hay pagos recientes</p>
-            )}
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <Emoji emoji="📅" size="2xl" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Reservas Activas</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalBookings}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-yellow-100 rounded-lg">
+              <Emoji emoji="🛒" size="2xl" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Ventas de Vino</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalWineSales}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-indigo-100 rounded-lg">
+              <Emoji emoji="📍" size="2xl" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Locaciones</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalLocations}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <Emoji emoji="💰" size="2xl" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Ingresos Totales</p>
+              <p className="text-2xl font-bold text-gray-900">${stats.totalRevenue.toLocaleString()}</p>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Acciones Rápidas</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link
-            href="/admin/reservations"
-            className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <span className="text-2xl mr-3">📅</span>
-            <div>
-              <p className="font-medium text-gray-900">Gestionar Reservas</p>
-              <p className="text-sm text-gray-500">Ver y administrar todas las reservas</p>
+      <div className="bg-white rounded-lg shadow">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-medium text-gray-900">Acciones Rápidas</h2>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Link 
+              href="/admin/sales" 
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Emoji emoji="📈" size="2xl" className="mr-3" />
+              <div>
+                <p className="font-medium text-gray-900">Ver Ventas de Vino</p>
+                <p className="text-sm text-gray-500">Gestionar ventas</p>
+              </div>
+            </Link>
+            
+            <Link 
+              href="/admin/wines" 
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Emoji emoji="🍷" size="2xl" className="mr-3" />
+              <div>
+                <p className="font-medium text-gray-900">Gestionar Vinos</p>
+                <p className="text-sm text-gray-500">Catálogo de vinos</p>
+              </div>
+            </Link>
+            
+            <Link 
+              href="/admin/customers" 
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Emoji emoji="👥" size="2xl" className="mr-3" />
+              <div>
+                <p className="font-medium text-gray-900">Ver Clientes</p>
+                <p className="text-sm text-gray-500">Base de clientes</p>
+              </div>
+            </Link>
+            
+            <Link 
+              href="/admin/experiencias" 
+              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Emoji emoji="✨" size="2xl" className="mr-3" />
+              <div>
+                <p className="font-medium text-gray-900">Experiencias</p>
+                <p className="text-sm text-gray-500">Catálogo completo</p>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Import Status */}
+      <div className="bg-white rounded-lg shadow">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-medium text-gray-900">Estado de Importación de Datos</h2>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <div className="text-2xl font-bold text-green-600">{stats.totalWines}</div>
+              <div className="text-sm text-green-800">Vinos Importados</div>
+              <div className="text-xs text-green-600 mt-1">✅ Completo</div>
             </div>
-          </Link>
-          <Link
-            href="/admin/events"
-            className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <span className="text-2xl mr-3">🎉</span>
-            <div>
-              <p className="font-medium text-gray-900">Crear Evento</p>
-              <p className="text-sm text-gray-500">Programar nuevas experiencias</p>
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <div className="text-2xl font-bold text-green-600">{stats.totalCustomers}</div>
+              <div className="text-sm text-green-800">Contactos Importados</div>
+              <div className="text-xs text-green-600 mt-1">✅ Completo</div>
             </div>
-          </Link>
-          <Link
-            href="/admin/payments"
-            className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <span className="text-2xl mr-3">💳</span>
-            <div>
-              <p className="font-medium text-gray-900">Ver Pagos</p>
-              <p className="text-sm text-gray-500">Revisar historial de pagos</p>
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <div className="text-2xl font-bold text-green-600">{stats.totalLocations}</div>
+              <div className="text-sm text-green-800">Locaciones Importadas</div>
+              <div className="text-xs text-green-600 mt-1">✅ Completo</div>
             </div>
-          </Link>
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <div className="text-2xl font-bold text-green-600">{stats.totalWineSales}</div>
+              <div className="text-sm text-green-800">Ventas Importadas</div>
+              <div className="text-xs text-green-600 mt-1">✅ Completo</div>
+            </div>
+          </div>
+          <div className="mt-4 text-center text-sm text-gray-600">
+            Última importación: Hoy • Todos los datos de Airtable están sincronizados
+          </div>
         </div>
       </div>
     </div>

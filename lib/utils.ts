@@ -46,6 +46,19 @@ export function formatDate(
 }
 
 /**
+ * Format date in Chilean short format (dd/mm/yyyy)
+ */
+export function formatDateShort(
+  date: Date | string | number
+) {
+  return new Intl.DateTimeFormat('es-CL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(date))
+}
+
+/**
  * Format date and time in Chilean format
  */
 export function formatDateTime(
@@ -259,4 +272,16 @@ export function deepMerge<T extends Record<string, any>>(
   }
   
   return result
+}
+
+export function formatCurrency(amount: number | null | undefined, currency: string = 'USD') {
+  if (amount === null || amount === undefined) {
+    return ''
+  }
+  
+  return new Intl.NumberFormat('es-CL', {
+    style: 'currency',
+    currency: currency,
+    minimumFractionDigits: 0,
+  }).format(amount)
 } 
